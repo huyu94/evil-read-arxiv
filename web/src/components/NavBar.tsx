@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useLanguage } from "@/components/LanguageContext";
 
 const NAV_ITEMS = [
+  { href: "/", icon: "日", labelKey: "nav.home" },
   { href: "/papers", icon: "📱", labelKey: "nav.papers" },
   { href: "/favorites", icon: "⭐", labelKey: "nav.favorites" },
   { href: "/settings", icon: "⚙️", labelKey: "nav.settings" },

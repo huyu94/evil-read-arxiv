@@ -7,6 +7,7 @@ import type {
   PreferenceUpdateResult,
   AppSettings,
   FavoriteFolder,
+  DailyPaperDigest,
 } from "./types";
 
 const BASE = "/api";
@@ -24,8 +25,30 @@ export async function fetchPapers(date?: string, range?: string): Promise<Papers
   const params = new URLSearchParams();
   if (date) params.set("date", date);
   if (range) params.set("range", range);
+  params.set("details", "lazy");
   const qs = params.toString();
   return fetchJson(`${BASE}/papers${qs ? `?${qs}` : ""}`);
+}
+
+export async function fetchDailyDigests(): Promise<{ digests: DailyPaperDigest[] }> {
+  return fetchJson(`${BASE}/daily-digests`);
+}
+
+export async function triggerDailyCrawl(
+  date?: string,
+  force = false
+): Promise<{
+  date: string;
+  status: "success" | "running" | "failed";
+  reused: boolean;
+  total: number;
+  message?: string;
+}> {
+  return fetchJson(`${BASE}/crawl/daily`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date, force, triggerType: "manual" }),
+  });
 }
 
 export async function fetchAnalysis(arxivId: string, title?: string, abstract?: string): Promise<PaperAnalysis> {
@@ -34,6 +57,18 @@ export async function fetchAnalysis(arxivId: string, title?: string, abstract?: 
   if (abstract) params.set("abstract", abstract);
   const qs = params.toString();
   return fetchJson(`${BASE}/papers/${encodeURIComponent(arxivId)}/analyze${qs ? `?${qs}` : ""}`);
+}
+
+export async function fetchPaperSummary(
+  arxivId: string,
+  title?: string,
+  abstract?: string
+): Promise<{ summary: string }> {
+  return fetchJson(`${BASE}/papers/${encodeURIComponent(arxivId)}/summary`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, abstract }),
+  });
 }
 
 export async function fetchPaperImages(arxivId: string): Promise<PaperImage[]> {
@@ -133,6 +168,7 @@ export async function fetchPapersWithFocus(
 ): Promise<PapersResponse> {
   const params = new URLSearchParams({ date, focus });
   if (range) params.set("range", range);
+  params.set("details", "lazy");
   return fetchJson(`${BASE}/papers?${params.toString()}`);
 }
 

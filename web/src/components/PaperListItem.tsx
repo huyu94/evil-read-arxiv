@@ -71,10 +71,6 @@ export default function PaperListItem({
           {paper.authors.length > 2 ? " et al." : ""}
         </span>
       </div>
-      {/* Chinese summary preview */}
-      <p className="text-xs text-[var(--text-secondary)] mt-1 line-clamp-2 leading-relaxed">
-        {paper.summary}
-      </p>
     </button>
   );
 }

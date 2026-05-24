@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const paperList = cached.papers
       .map(
         (p: Paper, i: number) =>
-          `[${i}] ${p.title}\n${p.summary}`
+          `[${i}] ${p.title}\n${p.summary || p.original_abstract}`
       )
       .join("\n\n");
 

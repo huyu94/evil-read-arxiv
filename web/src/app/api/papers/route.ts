@@ -177,6 +177,7 @@ export async function GET(request: NextRequest) {
     searchParams.get("date") || new Date().toISOString().slice(0, 10);
   const focus = searchParams.get("focus") || "";
   const range = searchParams.get("range") || ""; // "week" | "month" | ""
+  const lazyDetails = searchParams.get("details") === "lazy";
 
   const days = range === "week" ? 7 : range === "month" ? 30 : 1;
 
@@ -184,9 +185,10 @@ export async function GET(request: NextRequest) {
     const config = await getResearchConfig();
     const lang: Language = (config.language === "en" ? "en" : "zh");
 
+    const cacheSuffix = `${range || "day"}_${lang}${lazyDetails ? "_lazy" : ""}`;
     const cacheKey = focus
-      ? `${date}_focus_${simpleHash(focus)}_${range || "day"}_${lang}`
-      : `${date}_${range || "day"}_${lang}`;
+      ? `${date}_focus_${simpleHash(focus)}_${cacheSuffix}`
+      : `${date}_${cacheSuffix}`;
 
     let cached = await getCachedPapers(cacheKey);
     if (!cached) {
@@ -212,9 +214,11 @@ export async function GET(request: NextRequest) {
       const focusArgs = searchFocus ? ["--focus", searchFocus] : [];
       const papers = await searchPapers(date, configPath, topN, focusArgs, days);
 
-      let summarizedPapers = papers.map((p) => ({
+      let summarizedPapers: Paper[] = papers.map((p) => ({
         ...p,
         original_abstract: p.summary,
+        summary: lazyDetails ? "" : p.summary,
+        summaryStatus: lazyDetails ? "lazy" as const : "ready" as const,
       }));
 
       try {
@@ -223,7 +227,13 @@ export async function GET(request: NextRequest) {
           client = resolved.client;
           model = resolved.model;
         }
-        summarizedPapers = await batchGenerateSummaries(papers, client, model, lang);
+        if (!lazyDetails) {
+          summarizedPapers = await batchGenerateSummaries(papers, client, model, lang);
+          summarizedPapers = summarizedPapers.map((paper) => ({
+            ...paper,
+            summaryStatus: "ready" as const,
+          }));
+        }
 
         // Auto-add new research domain if this is a focus search with results
         if (focus && summarizedPapers.length > 0) {

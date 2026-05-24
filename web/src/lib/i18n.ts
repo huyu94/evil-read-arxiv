@@ -3,6 +3,7 @@ export type Language = "zh" | "en";
 const translations: Record<Language, Record<string, string>> = {
   zh: {
     // Nav
+    "nav.home": "每日",
     "nav.papers": "论文",
     "nav.favorites": "收藏",
     "nav.settings": "设置",
@@ -83,6 +84,7 @@ const translations: Record<Language, Record<string, string>> = {
   },
   en: {
     // Nav
+    "nav.home": "Daily",
     "nav.papers": "Papers",
     "nav.favorites": "Favorites",
     "nav.settings": "Settings",

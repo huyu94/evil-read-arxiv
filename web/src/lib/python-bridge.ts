@@ -68,8 +68,9 @@ export async function searchPapers(
   extraArgs: string[] = [],
   days: number = 30
 ): Promise<Paper[]> {
+  const pythonBin = process.platform === "win32" ? "python" : "python3";
   const baseArgs = [
-    "python3",
+    pythonBin,
     SCRIPT_PATH,
     "--config",
     configPath,

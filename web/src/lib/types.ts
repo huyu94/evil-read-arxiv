@@ -7,6 +7,7 @@ export interface Paper {
   original_abstract: string;
   highlights?: PaperAnalysis;
   images?: PaperImage[];
+  summaryStatus?: "ready" | "lazy";
   published_date: string;
   categories: string[];
   matched_domain: string;
@@ -40,6 +41,14 @@ export interface PapersResponse {
   date: string;
   papers: Paper[];
   total: number;
+}
+
+export interface DailyPaperDigest {
+  date: string;
+  total: number;
+  papers: Paper[];
+  cacheKey: string;
+  updatedAt?: string;
 }
 
 export interface FeedbackEntry {

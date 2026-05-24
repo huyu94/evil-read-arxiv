@@ -1,12 +1,14 @@
 import { promises as fs } from "fs";
 import path from "path";
 import yaml from "js-yaml";
+import { getDailyDigestsFromDb, getDailyPapersFromDb } from "@/lib/server/paper-repository";
 import type {
   FeedbackData,
   FeedbackEntry,
   Preferences,
   PapersResponse,
   Paper,
+  DailyPaperDigest,
   PaperAnalysis,
   PaperImage,
   ResearchConfig,
@@ -16,6 +18,7 @@ import type {
 const DATA_DIR = path.join(process.cwd(), "..", "data");
 const CACHE_DIR = path.join(DATA_DIR, "papers_cache");
 const ANALYSIS_CACHE_DIR = path.join(DATA_DIR, "analysis_cache");
+const SUMMARY_CACHE_DIR = path.join(DATA_DIR, "summary_cache");
 const IMAGES_DIR = path.join(DATA_DIR, "paper_images");
 const CONFIG_PATH = path.join(process.cwd(), "..", "config.yaml");
 
@@ -83,6 +86,11 @@ export async function savePreferences(prefs: Preferences) {
 export async function getCachedPapers(
   date: string
 ): Promise<PapersResponse | null> {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const dbPapers = await getDailyPapersFromDb(date).catch(() => null);
+    if (dbPapers) return dbPapers;
+  }
+
   const filePath = path.join(CACHE_DIR, `${date}.json`);
   try {
     const raw = await fs.readFile(filePath, "utf-8");
@@ -105,6 +113,50 @@ export async function listCachedDates(): Promise<string[]> {
     .map((f) => f.replace(".json", ""))
     .sort()
     .reverse();
+}
+
+export async function getDailyPaperDigests(
+  limit = 14,
+  papersPerDay = 6
+): Promise<DailyPaperDigest[]> {
+  const dbDigests = await getDailyDigestsFromDb(limit, papersPerDay).catch(() => null);
+  if (dbDigests) return dbDigests;
+
+  await ensureDir(CACHE_DIR);
+  const files = await fs.readdir(CACHE_DIR);
+  const dailyFiles = files
+    .filter((file) => file.endsWith(".json"))
+    .filter((file) => /^\d{4}-\d{2}-\d{2}(_day_[a-z]{2})?\.json$/.test(file))
+    .sort()
+    .reverse();
+
+  const digests: DailyPaperDigest[] = [];
+  const seenDates = new Set<string>();
+
+  for (const file of dailyFiles) {
+    const cacheKey = file.replace(/\.json$/, "");
+    const cached = await readJson<PapersResponse | null>(
+      path.join(CACHE_DIR, file),
+      null
+    );
+    if (!cached || cached.papers.length === 0 || seenDates.has(cached.date)) {
+      continue;
+    }
+
+    const stat = await fs.stat(path.join(CACHE_DIR, file)).catch(() => null);
+    seenDates.add(cached.date);
+    digests.push({
+      date: cached.date,
+      total: cached.total ?? cached.papers.length,
+      papers: cached.papers.slice(0, papersPerDay),
+      cacheKey,
+      updatedAt: stat?.mtime.toISOString(),
+    });
+
+    if (digests.length >= limit) break;
+  }
+
+  return digests;
 }
 
 // --- Research Config (YAML) ---
@@ -156,6 +208,28 @@ export async function cacheAnalysis(
   const safe = arxivId.replace(/[^a-zA-Z0-9._-]/g, "_");
   await ensureDir(ANALYSIS_CACHE_DIR);
   await writeJson(path.join(ANALYSIS_CACHE_DIR, `${safe}.json`), analysis);
+}
+
+// --- Summary Cache ---
+
+export async function getCachedSummary(
+  arxivId: string
+): Promise<string | null> {
+  const safe = arxivId.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const filePath = path.join(SUMMARY_CACHE_DIR, `${safe}.json`);
+  try {
+    const raw = await fs.readFile(filePath, "utf-8");
+    const parsed = JSON.parse(raw) as { summary?: string };
+    return parsed.summary || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function cacheSummary(arxivId: string, summary: string) {
+  const safe = arxivId.replace(/[^a-zA-Z0-9._-]/g, "_");
+  await ensureDir(SUMMARY_CACHE_DIR);
+  await writeJson(path.join(SUMMARY_CACHE_DIR, `${safe}.json`), { summary });
 }
 
 // --- Paper Images ---

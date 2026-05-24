@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { Paper, PaperAnalysis, PaperImage } from "@/lib/types";
-import { fetchAnalysis, fetchPaperImages } from "@/lib/api";
+import { fetchAnalysis, fetchPaperImages, fetchPaperSummary } from "@/lib/api";
 import { useLanguage } from "@/components/LanguageContext";
 import FeedbackButtons from "./FeedbackButtons";
 
@@ -25,6 +25,8 @@ export default function PaperCard({ paper, onFeedback }: PaperCardProps) {
   const [images, setImages] = useState<PaperImage[]>(paper.images || []);
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [loadingImages, setLoadingImages] = useState(false);
+  const [displaySummary, setDisplaySummary] = useState(paper.summary || "");
+  const [loadingSummary, setLoadingSummary] = useState(paper.summaryStatus === "lazy");
   const [showAnalysis, setShowAnalysis] = useState(!!paper.highlights);
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
 
@@ -32,24 +34,65 @@ export default function PaperCard({ paper, onFeedback }: PaperCardProps) {
   useEffect(() => {
     let cancelled = false;
 
-    // Reset state for new paper
-    setAnalysis(paper.highlights || null);
-    setImages(paper.images || []);
-    setShowAnalysis(!!paper.highlights);
-    setLoadingAnalysis(false);
-    setLightboxImg(null);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      // Reset state for new paper
+      setAnalysis(paper.highlights || null);
+      setImages(paper.images || []);
+      setDisplaySummary(paper.summary || "");
+      setLoadingSummary(paper.summaryStatus === "lazy");
+      setShowAnalysis(!!paper.highlights);
+      setLoadingAnalysis(false);
+      setLightboxImg(null);
+    });
 
     // Load images (lightweight, cached on server)
     if (!paper.images?.length) {
-      setLoadingImages(true);
-      fetchPaperImages(paper.arxiv_id)
-        .then((data) => { if (!cancelled) setImages(data); })
-        .catch((err) => { if (!cancelled) console.error("Image loading failed:", err); })
-        .finally(() => { if (!cancelled) setLoadingImages(false); });
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setLoadingImages(true);
+        fetchPaperImages(paper.arxiv_id)
+          .then((data) => { if (!cancelled) setImages(data); })
+          .catch((err) => { if (!cancelled) console.error("Image loading failed:", err); })
+          .finally(() => { if (!cancelled) setLoadingImages(false); });
+      });
     }
 
     return () => { cancelled = true; };
-  }, [paper.arxiv_id, paper.highlights, paper.images]);
+  }, [paper.arxiv_id, paper.highlights, paper.images, paper.summary, paper.summaryStatus]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const abstract = paper.original_abstract || paper.summary;
+
+    if (paper.summaryStatus !== "lazy" || paper.summary || !abstract) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoadingSummary(true);
+      fetchPaperSummary(paper.arxiv_id, paper.title, abstract)
+        .then(({ summary }) => {
+          if (!cancelled) setDisplaySummary(summary);
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            console.error("Summary loading failed:", err);
+            setDisplaySummary(abstract);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingSummary(false);
+        });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [paper.arxiv_id, paper.original_abstract, paper.summary, paper.summaryStatus, paper.title]);
 
   const handleDeepDive = () => {
     if (analysis) {
@@ -147,11 +190,11 @@ export default function PaperCard({ paper, onFeedback }: PaperCardProps) {
           </div>
         )}
 
-        {/* Chinese summary (always visible) */}
-        {paper.summary && (
+        {/* Chinese summary (lazy-loaded for the selected paper) */}
+        {(loadingSummary || displaySummary) && (
           <div className="bg-[var(--bg-secondary)] border-l-[3px] border-l-[var(--accent-blue)] rounded-r-lg p-3 lg:p-4">
             <div className="text-sm lg:text-base leading-relaxed text-[var(--text-primary)] opacity-90 whitespace-pre-line">
-              {paper.summary}
+              {loadingSummary ? "Loading summary..." : displaySummary}
             </div>
           </div>
         )}

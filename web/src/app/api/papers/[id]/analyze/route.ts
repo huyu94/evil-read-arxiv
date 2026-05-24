@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAnthropicClientWithSettings } from "@/lib/anthropic";
 import { getCachedAnalysis, cacheAnalysis, getResearchConfig } from "@/lib/data";
+import { isObjectStorageConfigured, putJsonObject } from "@/lib/server/object-storage";
+import { savePaperAnalysisToDb } from "@/lib/server/paper-repository";
 import type { PaperAnalysis } from "@/lib/types";
 import { type Language, prompts } from "@/lib/i18n";
 
@@ -107,6 +109,16 @@ export async function GET(
       }
     }
 
+    let objectRef: { bucket: string; objectKey: string } | undefined;
+    if (isObjectStorageConfigured()) {
+      const object = await putJsonObject(
+        `papers/${arxivId}/analysis/${model}/${Date.now()}.json`,
+        analysis
+      );
+      objectRef = { bucket: object.bucket, objectKey: object.objectKey };
+    }
+
+    await savePaperAnalysisToDb(arxivId, analysis, model, objectRef);
     await cacheAnalysis(cacheId, analysis);
     return NextResponse.json(analysis);
   } catch (error) {
