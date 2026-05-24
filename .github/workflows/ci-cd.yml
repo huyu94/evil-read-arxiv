@@ -88,10 +88,16 @@ jobs:
             --exclude='web/.next' \
             -czf /tmp/evil-read-arxiv.tar.gz .
 
+      - name: Build Docker image
+        run: |
+          docker build -t evil-read-arxiv:latest .
+          docker save evil-read-arxiv:latest | gzip > /tmp/evil-read-arxiv-image.tar.gz
+
       - name: Upload source
         run: |
           ssh -i ~/.ssh/aliyun_deploy_key -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" "mkdir -p '$DEPLOY_PATH'"
           scp -i ~/.ssh/aliyun_deploy_key -P "${SSH_PORT:-22}" /tmp/evil-read-arxiv.tar.gz "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/release.tar.gz"
+          scp -i ~/.ssh/aliyun_deploy_key -P "${SSH_PORT:-22}" /tmp/evil-read-arxiv-image.tar.gz "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/image.tar.gz"
           if [ -n "$APP_ENV" ]; then
             printf '%s\n' "$APP_ENV" | ssh -i ~/.ssh/aliyun_deploy_key -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" "cat > '$DEPLOY_PATH/.env' && chmod 600 '$DEPLOY_PATH/.env'"
           else
@@ -117,6 +123,8 @@ jobs:
           fi
 
           docker compose version
-          docker compose up -d --build
+          gunzip -c image.tar.gz | docker load
+          rm -f image.tar.gz
+          docker compose up -d --no-build
           docker compose ps
           REMOTE

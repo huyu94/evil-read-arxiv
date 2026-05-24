@@ -75,7 +75,7 @@ docker compose up -d --build
 The workflow in `.github/workflows/ci-cd.yml` does two things:
 
 - Pull requests: run `npm ci`, `npm run lint`, and `npm run build`.
-- Pushes to `main` or `master`: run CI, upload the source bundle to the server, then run `docker compose up -d --build`.
+- Pushes to `main` or `master`: run CI, build the Docker image on GitHub Actions, upload the source bundle and image tarball to the server, then run `docker compose up -d --no-build`.
 
 Add these repository secrets in GitHub:
 
@@ -95,6 +95,8 @@ cd /opt/evil-read-arxiv
 ```
 
 Create `.env` in that directory before the first GitHub Actions deployment, or set the `ALIYUN_APP_ENV` repository secret to the full `.env` content. `config.yaml` is uploaded from the repository by default. The workflow intentionally does not upload local `.env`, `data`, or Git history.
+
+The deployment workflow loads the Docker image built by GitHub Actions on the server, so the Alibaba Cloud server does not need to pull the base image from Docker Hub during deployment.
 
 For SSH key setup:
 

@@ -1,5 +1,6 @@
 services:
   evil-read-arxiv:
+    image: evil-read-arxiv:latest
     build:
       context: .
       dockerfile: Dockerfile
