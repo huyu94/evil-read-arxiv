@@ -56,6 +56,7 @@ jobs:
       SSH_PORT: ${{ secrets.ALIYUN_PORT }}
       SSH_PRIVATE_KEY: ${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}
       DEPLOY_PATH: ${{ secrets.ALIYUN_DEPLOY_PATH }}
+      APP_ENV: ${{ secrets.ALIYUN_APP_ENV }}
 
     steps:
       - name: Checkout
@@ -91,13 +92,31 @@ jobs:
         run: |
           ssh -i ~/.ssh/aliyun_deploy_key -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" "mkdir -p '$DEPLOY_PATH'"
           scp -i ~/.ssh/aliyun_deploy_key -P "${SSH_PORT:-22}" /tmp/evil-read-arxiv.tar.gz "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/release.tar.gz"
+          if [ -n "$APP_ENV" ]; then
+            printf '%s\n' "$APP_ENV" | ssh -i ~/.ssh/aliyun_deploy_key -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" "cat > '$DEPLOY_PATH/.env' && chmod 600 '$DEPLOY_PATH/.env'"
+          else
+            echo "ALIYUN_APP_ENV is not set; using existing remote .env if present."
+          fi
 
       - name: Deploy
         run: |
-          ssh -i ~/.ssh/aliyun_deploy_key -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" "cd '$DEPLOY_PATH' && \
-            tar -xzf release.tar.gz && \
-            rm -f release.tar.gz && \
-            test -f .env && \
-            test -f config.yaml && \
-            docker compose up -d --build && \
-            docker compose ps"
+          ssh -i ~/.ssh/aliyun_deploy_key -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          tar -xzf release.tar.gz
+          rm -f release.tar.gz
+
+          if [ ! -f .env ]; then
+            echo "::error::.env is missing in $DEPLOY_PATH. Create it on the server or set the ALIYUN_APP_ENV GitHub secret."
+            exit 1
+          fi
+
+          if [ ! -f config.yaml ]; then
+            echo "::error::config.yaml is missing in $DEPLOY_PATH after extracting the release bundle."
+            exit 1
+          fi
+
+          docker compose version
+          docker compose up -d --build
+          docker compose ps
+          REMOTE

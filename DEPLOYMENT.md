@@ -84,6 +84,7 @@ Add these repository secrets in GitHub:
 - `ALIYUN_PORT`: SSH port. Optional; defaults to `22` when empty.
 - `ALIYUN_SSH_PRIVATE_KEY`: private key for SSH deployment.
 - `ALIYUN_DEPLOY_PATH`: deployment directory on the server, for example `/opt/evil-read-arxiv`.
+- `ALIYUN_APP_ENV`: optional full `.env` file content. When set, the workflow writes it to `$ALIYUN_DEPLOY_PATH/.env` before deploying. When omitted, an existing server-side `.env` is required.
 
 Prepare the server once:
 
@@ -93,7 +94,7 @@ sudo chown -R "$USER":"$USER" /opt/evil-read-arxiv
 cd /opt/evil-read-arxiv
 ```
 
-Create `.env` in that directory before the first GitHub Actions deployment. `config.yaml` is uploaded from the repository by default. The workflow intentionally does not upload `.env`, `data`, or Git history.
+Create `.env` in that directory before the first GitHub Actions deployment, or set the `ALIYUN_APP_ENV` repository secret to the full `.env` content. `config.yaml` is uploaded from the repository by default. The workflow intentionally does not upload local `.env`, `data`, or Git history.
 
 For SSH key setup:
 
