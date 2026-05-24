@@ -1,3 +1,7 @@
 .claude/
+.env
 __pycache__/
 *.pyc
+data/papers_cache/
+data/npm-cache/
+data/paper_images/
