@@ -1,0 +1,23 @@
+services:
+  evil-read-arxiv:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: evil-read-arxiv
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      TZ: Asia/Shanghai
+      PORT: 3000
+    volumes:
+      - ./data:/app/data
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

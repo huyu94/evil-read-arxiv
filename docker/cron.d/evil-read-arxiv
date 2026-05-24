@@ -1,0 +1,5 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+TZ=Asia/Shanghai
+
+0 18 * * * root /app/docker/trigger-daily-crawl.sh >> /var/log/evil-read-arxiv-cron.log 2>&1

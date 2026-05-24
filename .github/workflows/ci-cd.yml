@@ -1,0 +1,103 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Lint and build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  deploy:
+    name: Deploy to Alibaba Cloud
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'master')
+
+    env:
+      SSH_HOST: ${{ secrets.ALIYUN_HOST }}
+      SSH_USER: ${{ secrets.ALIYUN_USER }}
+      SSH_PORT: ${{ secrets.ALIYUN_PORT }}
+      SSH_PRIVATE_KEY: ${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}
+      DEPLOY_PATH: ${{ secrets.ALIYUN_DEPLOY_PATH }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate secrets
+        run: |
+          test -n "$SSH_HOST"
+          test -n "$SSH_USER"
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$DEPLOY_PATH"
+
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/aliyun_deploy_key
+          chmod 600 ~/.ssh/aliyun_deploy_key
+          ssh-keyscan -p "${SSH_PORT:-22}" "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Package source
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.env' \
+            --exclude='data' \
+            --exclude='web/node_modules' \
+            --exclude='web/.next' \
+            -czf /tmp/evil-read-arxiv.tar.gz .
+
+      - name: Upload source
+        run: |
+          ssh -i ~/.ssh/aliyun_deploy_key -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" "mkdir -p '$DEPLOY_PATH'"
+          scp -i ~/.ssh/aliyun_deploy_key -P "${SSH_PORT:-22}" /tmp/evil-read-arxiv.tar.gz "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/release.tar.gz"
+
+      - name: Deploy
+        run: |
+          ssh -i ~/.ssh/aliyun_deploy_key -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" "cd '$DEPLOY_PATH' && \
+            tar -xzf release.tar.gz && \
+            rm -f release.tar.gz && \
+            test -f .env && \
+            test -f config.yaml && \
+            docker compose up -d --build && \
+            docker compose ps"
